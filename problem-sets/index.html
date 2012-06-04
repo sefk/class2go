@@ -1,0 +1,476 @@
+<html>
+    <head>
+        <script type="text/x-mathjax-config">
+            MathJax.Hub.Config({
+                               extensions: ["tex2jax.js"],
+                               jax: ["input/TeX", "output/HTML-CSS"],
+                               tex2jax: {
+                               inlineMath: [ ['$$','$$'], ['$', '$'], ["\\(","\\)"] ],      
+                               displayMath: [ ["\\[","\\]"] ],
+                               processEscapes: true
+                               },
+                               imageFont: null,
+                               "HTML-CSS": { availableFonts: ["TeX"] }
+                               });
+            
+            var explained=false;
+            </script>
+        
+        <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=default"></script>
+        <script src="../js/jquery.min.js" type="text/javascript"></script>
+        <script src="../js/jquery.tools.min.js" type="text/javascript"></script>
+        <script src="../js/jquery-ui.min.js" type="text/javascript"></script>
+        
+        <link rel="stylesheet" href="../css/jquery-ui.css" type="text/css" media="all" />
+        
+        <style type='text/css'>
+            .question_number_area{
+                margin-top: 12pt;
+                margin-bottom:6pt;
+            }
+            .quiz_question_number {
+                font-weight: bold;
+                display: inline;
+            }
+            .question_feedback{
+                display: inline;
+            }
+            .question_feedback img {
+                display:inline;
+                width:24px;
+                height:24px;
+            }
+            body {
+                font-family: Arial,Helvetica,Sans-Serif;
+            }
+            pre {white-space: normal; }
+            div.correct_question{
+                display:block;
+                border-radius: 5px;
+                padding:5px;
+                background: #f0fff0;
+                border: 2px green solid;
+            }
+            
+            div.incorrect_choice {
+                color: grey;
+            }
+            
+            div.correct_choice {
+                border:2px green solid;
+                border-radius: 5px;
+            }
+            div.feedback{
+                display:inline;
+            }
+            div.quiz_option {
+                margin: 5px;
+                padding: 5px;
+            }
+            div.quiz_option label {
+                padding-left: .5em;
+            }
+            
+            div.quiz_option label.checkbox-label {
+                font-size: 10pt;
+                margin-right: 5px;
+                width: 30px;
+            }
+            div.choice_explanation{
+                display:none;
+                border-radius: 5px;
+                padding:5px;
+                background: #f0f0f0;
+                border: 2px black solid;
+            }
+            div.correct_choice div.choice_explanation {
+                background: #f0fff0;
+                border: 2px green solid;
+            }
+            div.incorrect_choice div.choice_explanation {
+                background: #fff0f0;
+                border: 2px red solid;      
+                color: black;
+            }
+            div.question_explanation{
+                display:inline;
+            }
+            div.explanation_trigger{
+                /*display:inline;*/
+                float: left;
+                margin-right: 5px;
+            }
+            .ui-icon-blank {background-position:-240px -224px}
+            div.question-unit { 
+                border-bottom: 1px solid #ccc;
+                margin-bottom: 1em;
+                padding-bottom: 2em; 
+                position: relative;
+            }
+            div.question-unit textarea {
+                height: 7em;
+                width: 50em;
+            }
+            div.question-unit div.question-expl {
+                background-color: #def;
+                border: 2px solid #69f;
+                border-radius: 5px;
+                display: none;
+                padding: .5em 1em; 
+            }
+            .answer-expl {
+                background-color: #def;
+                border: 1px solid #69f;
+                border-radius: 5px;
+                display: none;
+                padding: 0 .5em;
+            }
+            </style>
+    </head>
+    <body>
+        <div class="quiz_question_body">
+            <form id="problem-set-form" name="problem-set-form" method="post" action="index.html">
+            <div class="question_number_area">
+            </div>
+            <div class="quiz_question_text"> 
+                
+            </div>
+            <div class="quiz_options">
+            </div>
+            <div class="quiz_question_body">
+                <!--<div class="question_number_area" id="div_q2"><span class="quiz_question_number">Question 2</span><div class="question_feedback" id="q2Feedback"></div><div class="question_explanation" id="q2Explanation"></div>-->
+                </div>
+                
+            </div>  
+            <input id="qsubmit" type="submit" value="Submit My Answers" />
+            <input id="qexplain" type="submit" value="Show Explanations" />
+            </form>    
+            <script>
+            var ansKey = {};
+
+            var renderQuestion = function (questionObj, questionId, preamble) {
+                var myQ = null;
+                if ($.isArray(questionObj)) {
+                    myQ = questionObj[Math.floor(Math.random()*questionObj.length)];
+                } else {
+                    myQ = questionObj;
+                }
+                $('.quiz_question_text').append('<div id="' + questionId + '" class="question-unit"></div>');
+                $('#' + questionId).text(questionId.split('_')[1] + '. ');
+                $('#' + questionId).append('<div id="' + questionId + '_feedback" class="question_feedback"></div>');
+                if (preamble) {
+                    $('#' + questionId).append(preamble);
+                }
+                $('#' + questionId).append(myQ["data"]["text"]);
+                $('#' + questionId).append('<div id="'+ questionId + '_X" class="question-expl"></div>');
+                $('#' + questionId + '_X').append(myQ["data"]["explanation"]);
+
+                //console.log(myQ);
+                var questionType = myQ["@attributes"]["type"];
+                $('#' + questionId).append('<div id="'+ questionId + '_Choices" class="answer-choices"></div>');
+               
+                renderAnswers(myQ["data"]["option_groups"]["option_group"], questionType, questionId);
+            };
+
+            var renderAnswers = function (optionObj, questionType, questionId) {
+
+                // obj that holds correct answers
+                ansKey[questionId] = {};
+
+                if (questionType === "GS_Choice_Answer_Question") {
+                    var answersToRender = [];
+                    if ($.isArray(optionObj)) {
+                        // rendering some from each collection
+                        for (var ansIdx = 0; ansIdx < optionObj.length; ansIdx += 1) {
+                            var ansColl = optionObj[ansIdx];
+                            var selectNum = parseInt(ansColl["@attributes"]["select"]);
+                            var correctedArr = [];
+                            for (var i = 0; i < ansColl["option"].length; i += 1) {
+                                if (ansColl["option"][i]) {
+                                    correctedArr.push(ansColl["option"][i]);
+                                }
+                            }
+                            for (var i = 0; i < selectNum; i += 1) {
+                                var arrLen = correctedArr.length;
+                                var randomIdx = Math.floor(Math.random() * arrLen);
+                                var myAns = correctedArr.splice(randomIdx,1);
+                                answersToRender.push(myAns[0]);
+                            }
+                        }    
+                        var origLen = answersToRender.length;
+                        for (var counter = 0; counter < origLen; counter += 1) {
+
+                            var newRandomIdx = (Math.floor(Math.random() * answersToRender.length));
+                            var curAns = answersToRender.splice(newRandomIdx,1);
+
+                            var curAnsId = curAns[0]["@attributes"]["id"];
+                            var curAnsScore = curAns[0]["@attributes"]["selected_score"];
+                            var curAnsText = curAns[0]["text"];
+                            var curAnsExpl = curAns[0]["explanation"];
+
+                            if (curAnsScore == 1) {
+                                ansKey[questionId]["correct"] = curAnsId;
+                            }
+
+                            $('#' + questionId + '_Choices').append('<div class="quiz_option"><input type="radio" id="' + curAnsId + '" name="' + questionId + '_input"></input><label for="' + curAnsId + '">' + curAnsText +'</label><div class="answer-expl">' + curAnsExpl + '</div></div>');
+                        }
+                    } else {
+                        // rendering all
+                        var origLen = optionObj["option"].length;
+                        //console.log(optionObj);
+                        var answersToRender = [];
+                        for (var counter = 0; counter < origLen; counter += 1) {
+
+                            var newRandomIdx = (Math.floor(Math.random() * optionObj["option"].length));
+                            var curAns = optionObj["option"].splice(newRandomIdx,1);
+
+                            var curAnsId = curAns[0]["@attributes"]["id"];
+                            var curAnsScore = curAns[0]["@attributes"]["selected_score"];
+                            var curAnsText = curAns[0]["text"];
+                            var curAnsExpl = curAns[0]["explanation"];
+
+                            if (curAnsScore == 1) {
+                                ansKey[questionId]["correct"] = curAnsId;
+                            }
+
+                            $('#' + questionId + '_Choices').append('<div class="quiz_option"><input type="radio" id="' + curAnsId + '" name="' + questionId + '_input"></input><label for="' + curAnsId + '">' + curAnsText +'</label><div class="answer-expl">' + curAnsExpl + '</div></div>');
+                        }
+                    }
+                } else if (questionType === "GS_Short_Answer_Question_Simple") {
+
+                    if ($.isArray(optionObj["option"])) {
+                        for (var i = 0; i < optionObj["option"].length; i += 1) {
+                            //console.log(optionObj["option"][i]);
+                            var curAnsId = optionObj["option"][i]["@attributes"]["id"];
+                            var curAnsScore = optionObj["option"][i]["@attributes"]["selected_score"];
+                            var curAnsText = optionObj["option"][i]["text"];
+                            var curAnsExpl = optionObj["option"][i]["explanation"];
+
+                            //console.log(curAnsExpl);
+                            //if (!$.isEmptyObject(curAnsExpl) && curAnsExpl.toLowerCase().indexOf("correct") != -1) {
+                            if (curAnsScore == 1) {
+                                ansKey[questionId]["correct"] = curAnsText;
+                            }
+                        }
+                    } else {
+                        var curAnsId = optionObj["option"]["@attributes"]["id"];
+                        var curAnsScore = optionObj["option"]["@attributes"]["selected_score"];
+                        var curAnsText = optionObj["option"]["text"];
+                        var curAnsExpl = optionObj["option"]["explanation"];
+
+                        //if (curAnsExpl && curAnsExpl.toLowerCase().indexOf("correct") != -1) {
+                        if (curAnsScore == 1) {
+                            ansKey[questionId]["correct"] = curAnsText;
+                        }
+                    }
+                    $('#' + questionId + '_Choices').append('<div class="quiz_option"><textarea id="' + curAnsId + '" name="' + questionId + '_input"></textarea><div class="answer-expl">' + curAnsExpl + '</div></div>');
+
+                }
+
+            };
+
+            var renderQuiz = function (jsonObj) {
+                // all should follow same format
+                var questionsArr = jsonObj["data"]["question_groups"]["question_group"];
+                for (q = 0; q < questionsArr.length; q += 1) {
+                    renderQuestion(questionsArr[q]["question"], 'Q_' + (q + 1), questionsArr[q]["preamble"]);
+                } 
+            };
+
+            $(document).ready(function() {
+
+                var psJsonPath = '';
+                if (location.search.split("ps=")[1]) { 
+                    psJsonPath = 'json/' + location.search.split("ps=")[1] + '/question.json';
+                } else {
+                    psJsonPath = 'json/Text-Processing-And-Edit-Distance/question.json'; 
+                }
+                $.get(psJsonPath, 
+                        function (data, message, jqXHR) {
+                            renderQuiz(data);
+                            console.log(ansKey);
+                        }, 'json');
+
+                $("#qsubmit").button();
+                $("#qsubmit").click(checkAnswers);
+                $("#qexplain").button();
+                $("#qexplain").click(explainAll);
+                $("#feedback-dialog").dialog({autoOpen:false});
+                $("#tooltiptest").tooltip();
+
+                $('input:checkbox').button({text:false, icons:{primary:'ui-icon-blank'}, label:'Click to select'});
+                $('input:checkbox').change( function (evt) {showCorrect(evt.target);});
+
+            });
+                
+            function showCorrect(input) {
+                if (input.checked) {
+                    $(input).button('option','icons', {primary: "ui-icon-check"});
+                } else { 
+                    $(input).button('option','icons', {primary: "ui-icon-blank"});
+                }
+            }
+
+            function checkAnswers(event) {
+
+                event.preventDefault();
+
+                if (event.currentTarget.value == "Try Again") {
+                    $(document).attr('location').href = location.href;
+                }
+
+                var tryQ1 = tryQ2 = null;
+
+                var userAnswers = [];
+                var quizLen = $('.question-unit').length;
+                for (var q = 1; q <= quizLen; q += 1) {
+                    var answerInput = $('[name*="Q_' + q + '_input"]');
+                    console.log(answerInput);
+                    console.log($('#Q_' + q + '_input'));
+                    switch (answerInput[0].tagName.toLowerCase()) {
+                        case "input":
+                            var questionStatus = false;
+                            for (var i = 0; i < answerInput.length; i += 1) {
+                                console.log(answerInput[i].id + ": " + answerInput[i].checked);
+                                console.log(answerInput[i].id == ansKey["Q_" + q]["correct"]);
+                                if (answerInput[i].checked) {
+                                    questionStatus = ansKey["Q_" + q]["correct"] == answerInput[i].id;
+                                }
+                            }
+                            userAnswers.push(questionStatus);
+                            break;
+                        case "textarea":
+                            userAnswers.push(ansKey["Q_" + q]["correct"] == answerInput.val());
+                            break;
+                        default:
+                            break;
+                    }
+
+                    var tryAgain = false;
+                    for (var a = 0; a < userAnswers.length; a += 1) {
+                        if (userAnswers[a] && userAnswers[a] != "undefined") {
+                            $('#Q_' + (a + 1) + '_feedback').html('<img src="../css/images/correct.png" />');
+                        } else {
+                            $('#Q_' + (a + 1) + '_feedback').html('<img src="../css/images/wrong.png" />');
+                            tryAgain = true;
+                        }
+                    }
+
+                    if (tryAgain) {
+                        $('#qsubmit').val('Try Again');
+                    } else {
+                        $('#qexplain').val('Continue');                        
+                        $('#qsubmit').hide();
+                    }
+
+                }
+                
+                /*
+                if (checkq2()) {
+                    $('#q2Feedback').html("<img src='../css/images/correct.png' />");
+                    $('#q2Explanation').html("<div class='correct_question'>Explanation: $$x = (7-2) \\times 3^{-1} \\in \\mathbb{Z}_{19}$$</div>");
+                    MathJax.Hub.Queue(["Typeset",MathJax.Hub,'q2Explanation']);
+                } else {
+                    $('#q2Feedback').html('<img src="../css/images/wrong.png" />');
+                    tryQ2 = true;
+                }
+
+                if (tryQ1 || tryQ2) {
+                }
+                */
+            }
+                
+            /*
+            function checkq1() {
+                if ($('#q1a')[0].checked!=false) return false;
+                if ($('#q1b')[0].checked!=true) return false;
+                if ($('#q1c')[0].checked!=false) return false;
+                if ($('#q1d')[0].checked!=true) return false;
+                if ($('#q1e')[0].checked!=true) return false;
+                if ($('#q1f')[0].checked!=false) return false;
+                if ($('#q1g')[0].checked!=true) return false;
+                if ($('#q1h')[0].checked!=false) return false; 
+                return true;
+            }
+                
+            function checkq2() {
+                var patt = /\b\s*8\s*\b/i;
+                return patt.test($('#q2ans').val());
+            }
+            */
+                
+            function explainAll(event) {
+
+                event.preventDefault();
+
+                if (event.currentTarget.value == "Continue") {
+                    $(document).attr('location').href = "../week1/Defining-Minimum-Edit-Distance/";
+                }
+
+                if (!explained) {
+                        
+                    explained=true;
+                    $('#div_q1a').addClass('incorrect_choice');
+                    $('#div_q1b').addClass('correct_choice');
+                    $('#div_q1c').addClass('incorrect_choice');
+                    $('#div_q1d').addClass('correct_choice');
+                    $('#div_q1e').addClass('correct_choice');
+                    $('#div_q1f').addClass('incorrect_choice');
+                    $('#div_q1g').addClass('correct_choice');
+                    $('#div_q1h').addClass('incorrect_choice');
+
+                    $('.question-expl').show();
+                    $('.answer-expl').show();
+                    
+                    /*
+                    $('#div_q1a').prepend(typesetExplanation(''))
+                    .prepend(triggerFactory());
+                    $('#div_q1b').prepend(typesetExplanation("You cannot encrypt $$k$$ under the root, but 1's children must be able to decrypt $$k$$."))
+                    .prepend(triggerFactory());
+                    $('#div_q1c').prepend(typesetExplanation(""))
+                    .prepend(triggerFactory());
+                    $('#div_q1d').prepend(typesetExplanation("You cannot encrypt $$k$$ under any key on the path from the root to node 25. Therefore 26 can only decrypt if you encrypt $$k$$ under key $$k_{26}$$."))
+                    .prepend(triggerFactory());
+                    $('#div_q1e').prepend(typesetExplanation("You cannot encrypt $$k$$ under key 5, but 11's children must be able to decrypt $$k$$."))
+                    .prepend(triggerFactory());
+                    
+                    $('#div_q1f').prepend(typesetExplanation(""))
+                    .prepend(triggerFactory());
+                    
+                    $('#div_q1g').prepend(typesetExplanation("You cannot encrypt $$k$$ under 2, but 6's children must be able to decrypt $$k$$."))
+                    .prepend(triggerFactory());
+                    
+                    $('#div_q1h').prepend(typesetExplanation(""))
+                    .prepend(triggerFactory());
+
+                    $('.explanation_trigger').tooltip({'position':'top right', 'opacity':1});  
+                    */
+                }
+                                                
+
+                //$('#q1Explanation').html("<div class='correct_question'>Question Explanation: See individual choice explanations</div>");
+
+                //$('#q2Explanation').html(" <div class='correct_question'>Question Explanation: $$x = (7-2) \\times 3^{-1} \\in \\mathbb{Z}_{19}$$</div>");
+                MathJax.Hub.Queue(["Typeset",MathJax.Hub,'q2Explanation']);
+
+                $('#qexplain').val('Continue');                        
+                    
+            }
+                
+            function triggerFactory() {
+                return $(document.createElement('div')).attr('class','explanation_trigger').html('<a href="javascript:">[?]</a> ')[0];
+                
+            }
+                
+            function typesetExplanation(text) {
+                if (text=='') {
+                    text="No explanation was given by the instructor.";
+                }
+                var explanationDiv=$(document.createElement('div')).attr('class','choice_explanation').html(text)[0];
+                MathJax.Hub.Queue(["Typeset",MathJax.Hub,explanationDiv]);
+                return explanationDiv;
+            }
+                
+            </script>
+    </body>
+</html>
